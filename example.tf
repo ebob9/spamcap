@@ -1,9 +1,11 @@
 provider "aws" {
-    region = "us-east-1"
+    region = "us-east-2"
+    shared_credentials_file = pathexpand("~/.aws/mycreds")
+    profile                 = "spamcap-acct"
 }
 
 resource "aws_s3_bucket" "spamcap" {
-    bucket = "spamcap"
+    bucket = "unique-bucket-name-spamcap"
     acl = "public-read"
 }
 
@@ -40,7 +42,7 @@ resource "aws_iam_policy" "spamcap" {
                 "s3:PutObjectAcl"
             ],
             "Resource": [
-                "arn:aws:s3:::spamcap",
+                "arn:aws:s3:::unique-bucket-name-spamcap",
                 "arn:aws:s3:::*/*"
             ]
         },
@@ -51,7 +53,7 @@ resource "aws_iam_policy" "spamcap" {
                 "iam:PassRole",
                 "iam:ListInstanceProfiles"
             ],
-            "Resource": "arn:aws:s3:::spamcap"
+            "Resource": "arn:aws:s3:::unique-bucket-name-spamcap"
         }
     ]
 }
@@ -60,13 +62,13 @@ EOF
 
 resource "aws_iam_policy_attachment" "spamcap" {
     name = "spamcap"
-    roles = ["${aws_iam_role.spamcap.name}"]
-    policy_arn = "${aws_iam_policy.spamcap.arn}"
+    roles = [aws_iam_role.spamcap.name]
+    policy_arn = aws_iam_policy.spamcap.arn
 }
 
 resource "aws_iam_instance_profile" "spamcap" {
     name = "spamcap"
-    role = "${aws_iam_role.spamcap.name}"
+    role = aws_iam_role.spamcap.name
 }
 
 data "aws_ami" "ubuntu" {
@@ -87,7 +89,7 @@ data "aws_ami" "ubuntu" {
 resource "aws_security_group" "allow_ssh" {
     name = "allow_ssh"
     description = "Allow SSH on port 22"
-    vpc_id = "vpc-a95910cd"
+    vpc_id = "vpc-idherethisisnotareallid"
 
     ingress {
         from_port = 22
@@ -101,7 +103,7 @@ resource "aws_security_group" "allow_ssh" {
 resource "aws_security_group" "allow_smtp" {
     name = "allow_smtp"
     description = "Allow SMTP on port 25"
-    vpc_id = "vpc-a95910cd"
+    vpc_id = "vpc-idherethisisnotareallid"
 
     ingress {
         from_port = 25
@@ -115,7 +117,7 @@ resource "aws_security_group" "allow_smtp" {
 resource "aws_security_group" "allow_egress_all" {
     name = "allow_egress_all"
     description = "Allow all outbound traffic"
-    vpc_id = "vpc-a95910cd"
+    vpc_id = "vpc-idherethisisnotareallid"
 
     egress {
         from_port = 0
@@ -126,18 +128,24 @@ resource "aws_security_group" "allow_egress_all" {
 }
 
 resource "aws_instance" "spamcap" {
-    ami = "${data.aws_ami.ubuntu.id}"
+    ami = data.aws_ami.ubuntu.id
     instance_type = "t2.nano"
-    vpc_security_group_ids = ["${aws_security_group.allow_ssh.id}", "${aws_security_group.allow_smtp.id}", "${aws_security_group.allow_egress_all.id}"]
-    iam_instance_profile = "${aws_iam_instance_profile.spamcap.name}"
-    key_name = "AWSDefault"
-    subnet_id = "subnet-0f8b3679"
+    vpc_security_group_ids = [aws_security_group.allow_ssh.id, aws_security_group.allow_smtp.id, aws_security_group.allow_egress_all.id]
+    iam_instance_profile = aws_iam_instance_profile.spamcap.name
+    key_name = "spamcap"
+    subnet_id = "subnet-idherethisisnotarealid"
 
     tags = {
         Name = "spamcap"
     }
 
+
+}
+
+resource "aws_eip" "spamcap-eip" {
+    instance = aws_instance.spamcap.id
+    vpc      = true
     provisioner "local-exec" {
-        command = "sleep 60; ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -u ubuntu --private-key ~/.ssh/AWSDefault -i '${aws_instance.spamcap.public_ip},' -e 'ansible_python_interpreter=/usr/bin/python3' spamcap.yml"
+        command = "sleep 60; ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -u ubuntu --private-key ~/.ssh/spamcap-key.pem -i '${aws_eip.spamcap-eip.public_ip},' -e 'ansible_python_interpreter=/usr/bin/python3' spamcap.yml"
     }
 }
